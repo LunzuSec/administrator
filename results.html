@@ -247,6 +247,12 @@
             transform: translateY(-2px);
         }
         
+        .btn-admin.active {
+            background: #7c3aed;
+            border-color: #7c3aed;
+            box-shadow: 0 0 20px rgba(139, 92, 246, 0.3);
+        }
+        
         .admin-badge {
             background: #8b5cf6;
             color: white;
@@ -363,7 +369,7 @@
                     <p><span class="info-label">OVERALL POSITION:</span> <span class="info-value" id="overallPosition">-</span></p>
                     <p id="adminModeIndicator" style="display: none;">
                         <span class="info-label">MODE:</span> 
-                        <span class="info-value"><span class="admin-badge">🔑 ADMIN MODE</span> Fee checking bypassed</span>
+                        <span class="info-value"><span class="admin-badge">🔑 ADMIN MODE</span> Fee checking & DOB bypassed</span>
                     </p>
                 </div>
             </div>
@@ -451,12 +457,10 @@
         // ============================================
         const GAS_URL = 'https://script.google.com/macros/s/AKfycbzo9mLdaOxCA8nDag3-XpSYetSiSK7O_JpT3PUHC5zyVQvc-I_7ycULSlnySxLgXJGq5A/exec';
         
-        // Cache for results
         let cachedResults = null;
         let isGeneratingPDF = false;
         let isAdminMode = false;
         
-        // Get URL parameters
         const urlParams = new URLSearchParams(window.location.search);
         const studentName = urlParams.get('name');
         const studentClass = urlParams.get('class');
@@ -464,13 +468,12 @@
         const termKey = urlParams.get('term');
         const adminParam = urlParams.get('admin');
         
-        // Check if admin mode is enabled via URL parameter
         if (adminParam === 'true') {
             isAdminMode = true;
         }
         
         // ============================================
-        // OPTIMIZED API CALL
+        // API CALL
         // ============================================
         function callGASAPI(action, params = {}) {
             return new Promise((resolve, reject) => {
@@ -525,7 +528,7 @@
         // LOAD RESULTS
         // ============================================
         async function loadResults() {
-            if (!studentName || !studentClass || !dateOfBirth) {
+            if (!studentName || !studentClass) {
                 showError('Missing student information.');
                 return;
             }
@@ -534,13 +537,27 @@
                 showLoading(true);
                 updateLoadingMessage('Fetching your results...');
                 
-                const response = await callGASAPI('getStudentResults', {
-                    studentName: studentName,
-                    studentClass: studentClass,
-                    dateOfBirth: dateOfBirth,
-                    term: termKey,
-                    isAdmin: isAdminMode
-                });
+                let response;
+                if (isAdminMode) {
+                    // Admin version - no DOB required
+                    response = await callGASAPI('getStudentResultsAdmin', {
+                        studentName: studentName,
+                        studentClass: studentClass,
+                        term: termKey
+                    });
+                } else {
+                    // Normal version - DOB required
+                    if (!dateOfBirth) {
+                        throw new Error('Date of Birth is required.');
+                    }
+                    response = await callGASAPI('getStudentResults', {
+                        studentName: studentName,
+                        studentClass: studentClass,
+                        dateOfBirth: dateOfBirth,
+                        term: termKey,
+                        isAdmin: false
+                    });
+                }
                 
                 if (!response || response.error) {
                     throw new Error(response?.error || 'Failed to load results');
@@ -553,8 +570,6 @@
                 cachedResults = response;
                 renderResults(response);
                 showLoading(false);
-                
-                // Update admin button state
                 updateAdminButton();
                 
             } catch (error) {
@@ -570,37 +585,30 @@
         function renderResults(results) {
             const config = results.termConfig || {};
             
-            // Update school name
             const isODL = results.studentClass && results.studentClass.includes("ODL");
             document.getElementById('schoolName').textContent = isODL ? 
                 (config.schoolNameODL || "LUNZU OPEN SECONDARY SCHOOL") : 
                 (config.schoolName || "LUNZU SECONDARY SCHOOL");
             
-            // Build academic header
             const academicYear = results.academicYear || config.academicYear || '2025-2026';
             const term = results.term || config.term || '';
             const examType = config.examType || 'RESULTS';
             const headerText = term ? `${academicYear} ${term} ${examType}` : `${academicYear} ${examType}`;
             document.getElementById('academicHeader').textContent = headerText.trim();
             
-            // ============================================
-            // FEE BALANCE WARNING
-            // ============================================
+            // Fee Alert
             const feeAlertContainer = document.getElementById('feeAlertContainer');
             
-            // Check if user is in admin mode
             if (results.isAdmin) {
                 feeAlertContainer.innerHTML = `
                     <div class="fee-alert-admin">
                         <i class="fas fa-user-shield me-2" style="color: #4caf50;"></i>
                         <strong style="color: #2e7d32;">ADMIN MODE ACTIVE:</strong> 
-                        <span style="color: #2e7d32;">Fee balance checking has been bypassed.</span>
+                        <span style="color: #2e7d32;">Fee checking and DOB validation bypassed.</span>
                         ${results.feeBalance < 0 ? `<br><span style="font-size: 13px; color: #666;">Note: Student has outstanding balance of K${Math.abs(results.feeBalance).toLocaleString()}</span>` : ''}
                     </div>
                 `;
-                // Show admin indicator
-                const adminIndicator = document.getElementById('adminModeIndicator');
-                adminIndicator.style.display = 'block';
+                document.getElementById('adminModeIndicator').style.display = 'block';
             } else if (results.feeBalance < 0) {
                 var amountOwed = Math.abs(results.feeBalance);
                 feeAlertContainer.innerHTML = `
@@ -611,7 +619,6 @@
                         <br><span style="font-size: 13px; color: #666;">Please clear your fee balance to access results.</span>
                     </div>
                 `;
-                // Hide admin indicator if not admin
                 document.getElementById('adminModeIndicator').style.display = 'none';
             } else {
                 feeAlertContainer.innerHTML = '';
@@ -621,7 +628,7 @@
             // Student info
             const studentInfo = {
                 studentName: results.name,
-                dob: results.dob,
+                dob: results.dob || 'N/A',
                 studentClass: results.studentClass,
                 studentCount: results.studentCount,
                 examSitters: results.examSitters,
@@ -684,7 +691,6 @@
             document.getElementById('schoolAddress').textContent = config.schoolAddress || "Private bag 130, Lunzu";
             document.getElementById('governmentPolicy').textContent = config.governmentPolicy || "The grace period for payment of school fees is 2 weeks from the beginning of each term.";
             
-            // Show container
             document.getElementById('resultsContainer').style.display = 'block';
             document.title = `${results.name} - ${headerText}`;
         }
@@ -696,52 +702,33 @@
             isAdminMode = !isAdminMode;
             updateAdminButton();
             
-            if (cachedResults) {
-                // Re-fetch results with new admin mode
-                showLoading(true);
-                updateLoadingMessage('Reloading with admin mode...');
-                
-                callGASAPI('getStudentResults', {
-                    studentName: studentName,
-                    studentClass: studentClass,
-                    dateOfBirth: dateOfBirth,
-                    term: termKey,
-                    isAdmin: isAdminMode
-                }).then(response => {
-                    if (response && !response.error && response.success) {
-                        cachedResults = response;
-                        renderResults(response);
-                        showLoading(false);
-                    } else {
-                        throw new Error(response?.error || 'Failed to reload results');
-                    }
-                }).catch(error => {
-                    console.error('Error reloading:', error);
-                    showError('Failed to reload with admin mode: ' + error.message);
-                    showLoading(false);
-                });
+            // Reload with new admin mode
+            const currentUrl = new URL(window.location.href);
+            if (isAdminMode) {
+                currentUrl.searchParams.set('admin', 'true');
+                // Remove DOB from URL since it's not needed
+                currentUrl.searchParams.delete('dob');
             } else {
-                // Reload the page with admin parameter
-                const currentUrl = new URL(window.location.href);
-                if (isAdminMode) {
-                    currentUrl.searchParams.set('admin', 'true');
-                } else {
-                    currentUrl.searchParams.delete('admin');
+                currentUrl.searchParams.delete('admin');
+                // If no DOB, we need to prompt for it
+                if (!dateOfBirth) {
+                    showError('Date of Birth is required in normal mode. Please go back and enter DOB.');
+                    return;
                 }
-                window.location.href = currentUrl.toString();
+                currentUrl.searchParams.set('dob', dateOfBirth);
             }
+            window.location.href = currentUrl.toString();
         }
         
         function updateAdminButton() {
             const btnText = document.getElementById('adminToggleText');
+            const btn = document.getElementById('adminToggleBtn');
             if (isAdminMode) {
-                btnText.textContent = '🔓 Admin Mode ON';
-                document.getElementById('adminToggleBtn').style.background = '#7c3aed';
-                document.getElementById('adminToggleBtn').style.borderColor = '#7c3aed';
+                btnText.textContent = '🔓 Admin ON';
+                btn.classList.add('active');
             } else {
                 btnText.textContent = '🔒 Admin Mode';
-                document.getElementById('adminToggleBtn').style.background = '#8b5cf6';
-                document.getElementById('adminToggleBtn').style.borderColor = '#8b5cf6';
+                btn.classList.remove('active');
             }
         }
         
@@ -853,13 +840,22 @@
                 showLoading(true);
                 updateLoadingMessage('Generating PDF...');
                 
-                const pdfResponse = await callGASAPI('generatePDF', {
-                    studentName: cachedResults.name,
-                    studentClass: cachedResults.studentClass,
-                    dateOfBirth: cachedResults.dob,
-                    term: cachedResults.termKey,
-                    isAdmin: isAdminMode
-                });
+                let pdfResponse;
+                if (isAdminMode) {
+                    pdfResponse = await callGASAPI('generatePDFAdmin', {
+                        studentName: cachedResults.name,
+                        studentClass: cachedResults.studentClass,
+                        term: cachedResults.termKey
+                    });
+                } else {
+                    pdfResponse = await callGASAPI('generatePDF', {
+                        studentName: cachedResults.name,
+                        studentClass: cachedResults.studentClass,
+                        dateOfBirth: cachedResults.dob,
+                        term: cachedResults.termKey,
+                        isAdmin: false
+                    });
+                }
                 
                 if (pdfResponse && !pdfResponse.error) {
                     const termSuffix = (cachedResults.term || 'Results').replace(/\s+/g, '_');
@@ -900,12 +896,10 @@
         // INITIALIZE
         // ============================================
         document.addEventListener('DOMContentLoaded', function() {
-            // Initialize admin button state
             updateAdminButton();
             loadResults();
         });
         
-        // Keyboard shortcuts
         document.addEventListener('keydown', function(e) {
             if ((e.ctrlKey || e.metaKey) && e.key === 'p') {
                 e.preventDefault();
