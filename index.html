@@ -21,7 +21,6 @@
             overflow-x: hidden;
         }
 
-        /* ---- Animated Background Canvas (Academic/Certificate theme) ---- */
         #bg-canvas-container {
             position: fixed;
             top: 0;
@@ -38,7 +37,6 @@
             object-fit: cover;
         }
 
-        /* ---- Glass-morphism container ---- */
         .container {
             position: relative;
             z-index: 1;
@@ -53,7 +51,6 @@
             overflow: hidden;
         }
 
-        /* ---- Header ---- */
         .header {
             background: rgba(10, 30, 50, 0.6);
             backdrop-filter: blur(6px);
@@ -98,7 +95,6 @@
             text-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
         }
 
-        /* ---- Content ---- */
         .content {
             padding: 28px 26px;
             background: rgba(255, 255, 255, 0.06);
@@ -161,7 +157,6 @@
             border-color: rgba(255, 215, 0, 0.4);
         }
 
-        /* ---- Search Container ---- */
         .search-container {
             position: relative;
         }
@@ -204,7 +199,6 @@
             font-style: italic;
         }
 
-        /* ---- Buttons ---- */
         .buttons {
             display: flex;
             gap: 14px;
@@ -264,6 +258,16 @@
             box-shadow: 0 12px 28px rgba(22, 163, 74, 0.3);
         }
 
+        .btn-admin {
+            background: rgba(139, 92, 246, 0.7);
+            color: white;
+        }
+        .btn-admin:not(:disabled):hover {
+            transform: translateY(-3px);
+            background: rgba(139, 92, 246, 0.9);
+            box-shadow: 0 12px 28px rgba(139, 92, 246, 0.3);
+        }
+
         .btn-back {
             background: rgba(71, 85, 105, 0.7);
             color: white;
@@ -274,7 +278,6 @@
             box-shadow: 0 12px 28px rgba(71, 85, 105, 0.3);
         }
 
-        /* ---- Progress & Status ---- */
         .progress-container {
             margin: 16px 0 8px 0;
             display: none;
@@ -340,7 +343,6 @@
             100% { transform: rotate(360deg); }
         }
 
-        /* ---- Alerts ---- */
         .alert {
             padding: 16px 20px;
             border-radius: 14px;
@@ -369,7 +371,6 @@
             border-left: 5px solid #3b82f6;
         }
 
-        /* ---- Footer ---- */
         .footer {
             text-align: center;
             padding: 16px;
@@ -389,7 +390,6 @@
             text-decoration: underline;
         }
 
-        /* ---- Initial Loading ---- */
         .initial-loading {
             position: fixed;
             top: 0;
@@ -422,14 +422,23 @@
             color: #e2e8f0;
         }
 
-        /* ---- API Status ---- */
         #apiStatus {
             color: #e2e8f0;
             font-weight: 400;
             text-shadow: 0 1px 6px rgba(0, 0, 0, 0.3);
         }
 
-        /* ---- Responsive ---- */
+        .admin-badge {
+            display: inline-block;
+            background: #8b5cf6;
+            color: white;
+            padding: 2px 12px;
+            border-radius: 12px;
+            font-size: 0.7rem;
+            font-weight: 600;
+            margin-left: 6px;
+        }
+
         @media (max-width: 600px) {
             body { padding: 10px; }
             .container { border-radius: 18px; }
@@ -445,18 +454,15 @@
 </head>
 <body>
 
-    <!-- Background Canvas (Academic/Certificate theme) -->
     <div id="bg-canvas-container">
         <canvas id="bgCanvas"></canvas>
     </div>
 
-    <!-- Initial Loading Overlay -->
     <div id="initialLoading" class="initial-loading">
         <div class="big-spinner"></div>
         <p id="initialLoadingText">Loading system configuration...</p>
     </div>
 
-    <!-- Main Container -->
     <div class="container">
         <div class="header">
             <img src="https://i.ibb.co/LxSJnMj/MALAWI-GOVERNMENT-3.png" alt="Malawi Government Logo" class="logo">
@@ -466,7 +472,6 @@
         </div>
 
         <div class="content">
-            <!-- Term Selection -->
             <div class="form-group">
                 <label for="termSelect"><span class="required-star">*</span> Select Term:</label>
                 <select id="termSelect" required onchange="handleTermChange()">
@@ -477,12 +482,10 @@
                 </small>
             </div>
 
-            <!-- API Status -->
             <div style="text-align:center; margin:10px 0; padding:10px; border-radius:12px; background:rgba(255,255,255,0.04); backdrop-filter:blur(4px);">
                 <span id="apiStatus">Checking connection...</span>
             </div>
 
-            <!-- Form -->
             <form id="studentForm" autocomplete="off">
                 <div class="form-group">
                     <label for="studentClass"><span class="required-star">*</span> Class:</label>
@@ -499,7 +502,6 @@
                     </select>
                 </div>
 
-                <!-- Progress Bar -->
                 <div id="progressContainer" class="progress-container">
                     <div class="progress-label">
                         <span id="progressLabel">Loading students...</span>
@@ -554,6 +556,9 @@
                     <button type="button" class="btn btn-secondary" onclick="downloadResultsAsPDF()" id="downloadPdfBtn" disabled>
                         <span>📥</span> Download PDF
                     </button>
+                    <button type="button" class="btn btn-admin" onclick="toggleAdminMode()" id="adminModeBtn">
+                        <span>🔑</span> <span id="adminModeText">Admin Mode</span>
+                    </button>
                     <button type="button" class="btn btn-back" onclick="goToStudentPortal()">
                         <span>←</span> Back to Student Portal
                     </button>
@@ -573,7 +578,7 @@
 
     <script>
         // ============================================================
-        // 1. ANIMATED BACKGROUND (Academic / Certificate theme)
+        // 1. ANIMATED BACKGROUND
         // ============================================================
         (function initBackground() {
             const canvas = document.getElementById('bgCanvas');
@@ -618,7 +623,6 @@
             function drawItems() {
                 ctx.clearRect(0, 0, w, h);
 
-                // Soft vignette
                 const grad = ctx.createRadialGradient(w / 2, h / 2, 0, w / 2, h / 2, Math.max(w, h) * 0.7);
                 grad.addColorStop(0, 'rgba(10, 22, 40, 0.05)');
                 grad.addColorStop(1, 'rgba(10, 22, 40, 0.40)');
@@ -640,14 +644,12 @@
                     ctx.shadowBlur = 22;
                     ctx.fillText(item.symbol, 0, 0);
 
-                    // Small accent
                     ctx.shadowBlur = 0;
                     ctx.font = `${item.size * 0.3}px "Segoe UI Emoji", "Apple Color Emoji", sans-serif`;
                     ctx.fillStyle = 'rgba(255,215,0,0.10)';
                     ctx.fillText('✦', item.size * 0.25, -item.size * 0.2);
                     ctx.restore();
 
-                    // Update position
                     item.x += item.speedX + Math.sin(item.phase + performance.now() * 0.0002) * 0.15;
                     item.y += item.speedY * 0.3 + Math.sin(item.phase + performance.now() * 0.00035) * 0.12;
                     item.rotation += item.rotSpeed;
@@ -691,6 +693,7 @@
         let loadingStartTime = 0;
         let loadingInterval = null;
         let loadingProgress = 0;
+        let isAdminMode = false;
 
         window.onload = async function() {
             document.getElementById('currentYear').textContent = new Date().getFullYear();
@@ -700,6 +703,7 @@
                 await testAPIConnection();
                 setupForm();
                 showInitialLoading(false);
+                updateAdminButton();
             } catch (error) {
                 console.error('Initialization error:', error);
                 showInitialLoading(false);
@@ -715,6 +719,25 @@
                 overlay.style.display = 'flex';
             } else {
                 overlay.style.display = 'none';
+            }
+        }
+
+        // ----- ADMIN MODE -----
+        function toggleAdminMode() {
+            isAdminMode = !isAdminMode;
+            updateAdminButton();
+            showInfo(isAdminMode ? '🔑 Admin Mode enabled - Fee checking bypassed' : '🔒 Admin Mode disabled');
+            setTimeout(() => clearError(), 2000);
+        }
+
+        function updateAdminButton() {
+            const btnText = document.getElementById('adminModeText');
+            if (isAdminMode) {
+                btnText.textContent = '🔑 Admin Mode ON';
+                document.getElementById('adminModeBtn').style.background = 'rgba(124, 58, 237, 0.9)';
+            } else {
+                btnText.textContent = '🔒 Admin Mode';
+                document.getElementById('adminModeBtn').style.background = 'rgba(139, 92, 246, 0.7)';
             }
         }
 
@@ -883,7 +906,7 @@
             }
         }
 
-        // ----- API CALLS (JSONP) -----
+        // ----- API CALLS -----
         function callGAS(action, params = {}) {
             return new Promise((resolve, reject) => {
                 const callbackName = 'cb_' + Date.now() + '_' + Math.random().toString(36).substr(2, 8);
@@ -1106,8 +1129,14 @@
             }
             clearError();
 
-            const resultsUrl =
+            let resultsUrl =
                 `results.html?name=${encodeURIComponent(studentName)}&class=${encodeURIComponent(studentClass)}&dob=${encodeURIComponent(dateOfBirth)}&term=${encodeURIComponent(termKey)}`;
+            
+            // Add admin flag if admin mode is enabled
+            if (isAdminMode) {
+                resultsUrl += '&admin=true';
+            }
+            
             const newTab = window.open(resultsUrl, '_blank');
             if (!newTab) {
                 showError('Please allow pop-ups to view results.');
@@ -1140,7 +1169,8 @@
                     studentName: studentName,
                     studentClass: studentClass,
                     dateOfBirth: dateOfBirth,
-                    term: termKey
+                    term: termKey,
+                    isAdmin: isAdminMode
                 });
                 if (result && result.error) {
                     throw new Error(result.error);
