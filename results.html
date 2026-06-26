@@ -236,6 +236,27 @@
             color: white;
         }
         
+        .btn-admin {
+            background: #8b5cf6;
+            color: white;
+            border-color: #8b5cf6;
+        }
+        
+        .btn-admin:hover {
+            background: #7c3aed;
+            transform: translateY(-2px);
+        }
+        
+        .admin-badge {
+            background: #8b5cf6;
+            color: white;
+            padding: 2px 10px;
+            border-radius: 12px;
+            font-size: 0.7rem;
+            font-weight: 600;
+            margin-left: 8px;
+        }
+        
         .loading-overlay {
             position: fixed;
             top: 0;
@@ -289,6 +310,14 @@
             border-radius: 8px;
         }
         
+        .fee-alert-admin {
+            background: #e8f5e9;
+            border-left: 4px solid #4caf50;
+            padding: 12px;
+            margin-bottom: 12px;
+            border-radius: 8px;
+        }
+        
         @media (max-width: 768px) {
             .school-title { font-size: 1.1rem; }
             .sub-title { font-size: 0.9rem; }
@@ -299,7 +328,7 @@
         
         @media print {
             @page { size: A4; margin: 10mm; }
-            .action-buttons, .btn-action, .loading-overlay, .fee-alert { display: none !important; }
+            .action-buttons, .btn-action, .loading-overlay, .fee-alert, .fee-alert-admin, .admin-badge { display: none !important; }
             .table-container { overflow: visible !important; }
             .results-table { min-width: 100% !important; }
         }
@@ -332,6 +361,10 @@
                     <p><span class="info-label">NUMBER OF STUDENTS:</span> <span class="info-value" id="studentCount">-</span></p>
                     <p><span class="info-label">NUMBER SAT FOR EXAMS:</span> <span class="info-value" id="examSitters">-</span></p>
                     <p><span class="info-label">OVERALL POSITION:</span> <span class="info-value" id="overallPosition">-</span></p>
+                    <p id="adminModeIndicator" style="display: none;">
+                        <span class="info-label">MODE:</span> 
+                        <span class="info-value"><span class="admin-badge">🔑 ADMIN MODE</span> Fee checking bypassed</span>
+                    </p>
                 </div>
             </div>
         </div>
@@ -404,6 +437,9 @@
             <button onclick="downloadPDF()" class="btn-action btn-print" id="downloadPdfBtn">
                 <i class="fas fa-download"></i> Download PDF
             </button>
+            <button onclick="switchToAdminMode()" class="btn-action btn-admin" id="adminToggleBtn">
+                <i class="fas fa-user-shield"></i> <span id="adminToggleText">Admin Mode</span>
+            </button>
         </div>
     </div>
     
@@ -415,9 +451,10 @@
         // ============================================
         const GAS_URL = 'https://script.google.com/macros/s/AKfycbzo9mLdaOxCA8nDag3-XpSYetSiSK7O_JpT3PUHC5zyVQvc-I_7ycULSlnySxLgXJGq5A/exec';
         
-        // Cache for results to prevent duplicate loads
+        // Cache for results
         let cachedResults = null;
         let isGeneratingPDF = false;
+        let isAdminMode = false;
         
         // Get URL parameters
         const urlParams = new URLSearchParams(window.location.search);
@@ -425,9 +462,15 @@
         const studentClass = urlParams.get('class');
         const dateOfBirth = urlParams.get('dob');
         const termKey = urlParams.get('term');
+        const adminParam = urlParams.get('admin');
+        
+        // Check if admin mode is enabled via URL parameter
+        if (adminParam === 'true') {
+            isAdminMode = true;
+        }
         
         // ============================================
-        // OPTIMIZED API CALL - Single function
+        // OPTIMIZED API CALL
         // ============================================
         function callGASAPI(action, params = {}) {
             return new Promise((resolve, reject) => {
@@ -447,7 +490,6 @@
                 const script = document.createElement('script');
                 script.src = url;
                 
-                // Timeout after 15 seconds (reduced from 30)
                 const timeoutId = setTimeout(() => {
                     if (window[callbackName]) {
                         delete window[callbackName];
@@ -480,7 +522,7 @@
         }
         
         // ============================================
-        // LOAD RESULTS - Single API call
+        // LOAD RESULTS
         // ============================================
         async function loadResults() {
             if (!studentName || !studentClass || !dateOfBirth) {
@@ -492,12 +534,12 @@
                 showLoading(true);
                 updateLoadingMessage('Fetching your results...');
                 
-                // Single API call for all data
                 const response = await callGASAPI('getStudentResults', {
                     studentName: studentName,
                     studentClass: studentClass,
                     dateOfBirth: dateOfBirth,
-                    term: termKey
+                    term: termKey,
+                    isAdmin: isAdminMode
                 });
                 
                 if (!response || response.error) {
@@ -508,13 +550,12 @@
                     throw new Error(response.message || 'No results found');
                 }
                 
-                // Cache results
                 cachedResults = response;
-                
-                // Render immediately
                 renderResults(response);
-                
                 showLoading(false);
+                
+                // Update admin button state
+                updateAdminButton();
                 
             } catch (error) {
                 console.error('Error:', error);
@@ -524,7 +565,7 @@
         }
         
         // ============================================
-        // RENDER RESULTS - Optimized DOM updates
+        // RENDER RESULTS
         // ============================================
         function renderResults(results) {
             const config = results.termConfig || {};
@@ -543,13 +584,24 @@
             document.getElementById('academicHeader').textContent = headerText.trim();
             
             // ============================================
-            // FEE BALANCE WARNING - SIMPLIFIED
-            // ONLY show warning if balance is NEGATIVE (less than 0)
-            // If balance >= 0, show nothing
+            // FEE BALANCE WARNING
             // ============================================
             const feeAlertContainer = document.getElementById('feeAlertContainer');
             
-            if (results.feeBalance < 0) {
+            // Check if user is in admin mode
+            if (results.isAdmin) {
+                feeAlertContainer.innerHTML = `
+                    <div class="fee-alert-admin">
+                        <i class="fas fa-user-shield me-2" style="color: #4caf50;"></i>
+                        <strong style="color: #2e7d32;">ADMIN MODE ACTIVE:</strong> 
+                        <span style="color: #2e7d32;">Fee balance checking has been bypassed.</span>
+                        ${results.feeBalance < 0 ? `<br><span style="font-size: 13px; color: #666;">Note: Student has outstanding balance of K${Math.abs(results.feeBalance).toLocaleString()}</span>` : ''}
+                    </div>
+                `;
+                // Show admin indicator
+                const adminIndicator = document.getElementById('adminModeIndicator');
+                adminIndicator.style.display = 'block';
+            } else if (results.feeBalance < 0) {
                 var amountOwed = Math.abs(results.feeBalance);
                 feeAlertContainer.innerHTML = `
                     <div class="fee-alert">
@@ -559,12 +611,14 @@
                         <br><span style="font-size: 13px; color: #666;">Please clear your fee balance to access results.</span>
                     </div>
                 `;
+                // Hide admin indicator if not admin
+                document.getElementById('adminModeIndicator').style.display = 'none';
             } else {
-                // Balance is zero or positive (credit) - show nothing
                 feeAlertContainer.innerHTML = '';
+                document.getElementById('adminModeIndicator').style.display = 'none';
             }
             
-            // Student info - batch update
+            // Student info
             const studentInfo = {
                 studentName: results.name,
                 dob: results.dob,
@@ -579,7 +633,7 @@
                 if (el) el.textContent = value || '-';
             }
             
-            // Subject table - build HTML string for faster rendering
+            // Subject table
             const resultsBody = document.getElementById('resultsBody');
             if (results.subjects && results.subjects.length > 0) {
                 let html = '';
@@ -601,7 +655,6 @@
                 }
                 resultsBody.innerHTML = html;
                 
-                // Show totals
                 if (results.additionalInfo?.totalMarks) {
                     document.getElementById('totalMarksContainer').style.display = 'block';
                     document.getElementById('totalMarks').textContent = results.additionalInfo.totalMarks;
@@ -634,6 +687,62 @@
             // Show container
             document.getElementById('resultsContainer').style.display = 'block';
             document.title = `${results.name} - ${headerText}`;
+        }
+        
+        // ============================================
+        // ADMIN MODE TOGGLE
+        // ============================================
+        function switchToAdminMode() {
+            isAdminMode = !isAdminMode;
+            updateAdminButton();
+            
+            if (cachedResults) {
+                // Re-fetch results with new admin mode
+                showLoading(true);
+                updateLoadingMessage('Reloading with admin mode...');
+                
+                callGASAPI('getStudentResults', {
+                    studentName: studentName,
+                    studentClass: studentClass,
+                    dateOfBirth: dateOfBirth,
+                    term: termKey,
+                    isAdmin: isAdminMode
+                }).then(response => {
+                    if (response && !response.error && response.success) {
+                        cachedResults = response;
+                        renderResults(response);
+                        showLoading(false);
+                    } else {
+                        throw new Error(response?.error || 'Failed to reload results');
+                    }
+                }).catch(error => {
+                    console.error('Error reloading:', error);
+                    showError('Failed to reload with admin mode: ' + error.message);
+                    showLoading(false);
+                });
+            } else {
+                // Reload the page with admin parameter
+                const currentUrl = new URL(window.location.href);
+                if (isAdminMode) {
+                    currentUrl.searchParams.set('admin', 'true');
+                } else {
+                    currentUrl.searchParams.delete('admin');
+                }
+                window.location.href = currentUrl.toString();
+            }
+        }
+        
+        function updateAdminButton() {
+            const btnText = document.getElementById('adminToggleText');
+            if (isAdminMode) {
+                btnText.textContent = '🔓 Admin Mode ON';
+                document.getElementById('adminToggleBtn').style.background = '#7c3aed';
+                document.getElementById('adminToggleBtn').style.borderColor = '#7c3aed';
+            } else {
+                btnText.textContent = '🔒 Admin Mode';
+                document.getElementById('adminToggleBtn').style.background = '#8b5cf6';
+                document.getElementById('adminToggleBtn').style.borderColor = '#8b5cf6';
+            }
         }
         
         // ============================================
@@ -748,7 +857,8 @@
                     studentName: cachedResults.name,
                     studentClass: cachedResults.studentClass,
                     dateOfBirth: cachedResults.dob,
-                    term: cachedResults.termKey
+                    term: cachedResults.termKey,
+                    isAdmin: isAdminMode
                 });
                 
                 if (pdfResponse && !pdfResponse.error) {
@@ -790,6 +900,8 @@
         // INITIALIZE
         // ============================================
         document.addEventListener('DOMContentLoaded', function() {
+            // Initialize admin button state
+            updateAdminButton();
             loadResults();
         });
         
